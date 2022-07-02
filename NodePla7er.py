@@ -1,11 +1,13 @@
 from logging import root
 import tkinter as tk
+from requests import delete
 from tkcolorpicker import askcolor
 from turtle import color, window_height
 from PIL import Image, ImageTk
 from cv2 import resize
 import filemanager as fm
 import networkmanager as nm
+import time
 
 
 class Canvas_Node():
@@ -14,35 +16,38 @@ class Canvas_Node():
         self.node_id = node_id
         self.radius = radius
         self.color = color
-        self.real_pos = (0, 0)
-        self.px_pos = (0, 0)
+        self.real_pos = [0, 0]
+        self.px_pos = [0, 0]
 
         self.tk_node_id, self.tk_label_id = self.create_node(px_init_x_pos, px_init_y_pos)
 
     def create_node(self, px_init_x_pos, px_init_y_pos):
-        self.px_pos = (px_init_x_pos, px_init_y_pos)
+        self.px_pos = [px_init_x_pos, px_init_y_pos]
         self.real_pos = self.get_real_pos_from_px(self.px_pos)
-        tk_node_id = self.canvas.create_oval(self.px_pos[0] - self.radius, self.px_pos[1] - self.radius, self.px_pos[0] + self.radius, self.px_pos[1] + self.radius, self.color)
-        tk_label_id = self.canvas.create_text(self.px_pos[0], self.px_pos[1], text=self.node_id)
+        tk_node_id = self.canvas.create_oval(self.px_pos[0] - self.radius, self.px_pos[1] - self.radius, self.px_pos[0] + self.radius, self.px_pos[1] + self.radius, fill=self.color, tags='node')
+        tk_label_id = self.canvas.create_text(self.px_pos[0], self.px_pos[1], text=self.node_id, tags='node')
+        nm.add_node_to_Graph(self.canvas.root.graph, self.node_id, self.real_pos[0], self.real_pos[1])
+        nm.create_edges(self.canvas.root.graph, self.node_id)
+        self.draw_node_edges(self.canvas.root.graph)
         return tk_node_id, tk_label_id
     
     def get_real_pos_from_px(self, px_pos):
-        self.real_pos[0] = self.px_pos[0] * 3 / self.canvas.resized_playground_img.width() # Change this value to change the scale of the playground
-        self.real_pos[1] = self.px_pos[1] * 2 / self.canvas.resized_playground_img.height() # Change this value to change the scale of the playground
-        return self.real_pos
+        real_pos = [self.px_pos[0] * 3 / self.canvas.resized_playground_img.width(), # Change this value to change the scale of the playground
+                    self.px_pos[1] * 2 / self.canvas.resized_playground_img.height()] # Change this value to change the scale of the playground
+        return real_pos
     
     def get_px_pos_from_real(self, real_pos):
-        self.px_pos[0] = real_pos / 3 * self.canvas.resized_playground_img.width()
-        self.px_pos[1] = real_pos / 2 * self.canvas.resized_playground_img.height()
-        return self.px_pos
+        px_pos = [real_pos[0] / 3 * self.canvas.resized_playground_img.width(),
+                  real_pos[1] / 2 * self.canvas.resized_playground_img.height()]
+        return px_pos
     
     def draw_node_edges(self, graph):
         for edge in nm.read_edges(graph, self.node_id):
             dest_node_data = nm.read_node_props(graph, edge[1])
-            dest_node_px_pos = self.get_px_pos_from_real(dest_node_data['x'], dest_node_data['y'])
-            edge_link = {edge[1], edge[0]}
+            dest_node_px_pos = self.get_px_pos_from_real((dest_node_data['x'], dest_node_data['y']))
+            edge_link = frozenset({edge[1], edge[0]})
             if True and (edge_link not in self.canvas.edges_ids.keys()): # We will have to check here if the connection is possible and if the node is not already connected
-                line_id = self.canvas.create_line(self.px_pos[0], self.px_pos[1], dest_node_px_pos[0], dest_node_px_pos[1], fill='black')
+                line_id = self.canvas.create_line(self.px_pos[0], self.px_pos[1], dest_node_px_pos[0], dest_node_px_pos[1], fill='black', tags='edge')
                 self.canvas.edges_ids[edge_link] = line_id
             elif False and (edge_link in self.canvas.edges_ids.keys()): # Here is if the node is already connected and the connection is not longer possible
                 self.canvas.delete(self.edges_ids[edge_link])
@@ -51,17 +56,36 @@ class Canvas_Node():
                 # We just update the line geometry
                 self.canvas.coords(self.canvas.edges_ids[edge_link], self.px_pos[0], self.px_pos[1], dest_node_px_pos[0], dest_node_px_pos[1])
                 
-        self.tag_raise("node")
+        self.canvas.tag_raise("node")
 
     def refresh_node_display(self):
         self.canvas.coords(self.tk_node_id, self.px_pos[0] - self.radius, self.px_pos[1] - self.radius, self.px_pos[0] + self.radius, self.px_pos[1] + self.radius)
         self.canvas.coords(self.tk_label_id, self.px_pos[0], self.px_pos[1])
         self.canvas.itemconfig(self.tk_node_id, fill=self.color)
-        self.canvas.delete("edge")
-        self.draw_node_edges(self.canvas.graph)
+        self.draw_node_edges(self.canvas.root.graph)
     
     def update_node(self, graph):
-        new_props = graph.get_node_properties(self.node_id)
+        new_props = nm.read_node_props(graph, self.node_id)
+        self.real_pos = [new_props['x'], new_props['y']]
+        self.px_pos = self.get_px_pos_from_real(self.real_pos)
+        self.color = new_props['color']
+        self.refresh_node_display()
+    
+    def delete_node(self, graph):
+        # Deleting the node and the text label
+        self.canvas.delete(self.tk_node_id)
+        self.canvas.delete(self.tk_label_id)
+
+        # Deleting the concerned edges
+        edges_to_delete = [frozenset(edge) for edge in nm.read_edges(graph, self.node_id)]
+        for edge in edges_to_delete:
+            self.canvas.delete(self.canvas.edges_ids[edge])
+            self.canvas.edges_ids.pop(edge)
+        self.canvas.tag_raise("node")
+
+        # Poping out the node from the graph
+        self.canvas.node_associated_id.pop(self.tk_node_id)
+        nm.delete_node(graph, self.node_id)
         
 
 
@@ -91,7 +115,8 @@ class MainCanvas(tk.Canvas):
         self.parent = parent
         self.root = root
 
-        self.node_associated_id = {}
+        self.node_associated_id = dict() # Links each tkinter node id to a canvas node object
+        self.edges_ids = dict() # Links each edge(represented by a set) to a tkinter line id
 
         self.playground_img = Image.open("images/playground.png")
         self.playground_img_ratio = self.playground_img.size[1] / self.playground_img.size[0]
@@ -110,35 +135,10 @@ class MainCanvas(tk.Canvas):
         self.bind_all("<KeyPress-Right>", self.right_key_pressed)
         self.bind_all("<KeyPress-Up>", self.up_key_pressed)
         self.bind_all("<KeyPress-Down>", self.down_key_pressed)
-        
         self.bind_all("<KeyPress-Delete>", self.delete_key_pressed)
 
-        self.tag_bind("node","<Button-1>",self.node_left_cliked)
+        self.tag_bind("node","<ButtonPress-1>",self.node_left_cliked)
         self.tag_bind("playground","<Button-1>",self.playground_left_cliked)
-
-    def update_canvas_node(self, canvas_node_id):
-        if canvas_node_id is not None:
-            props = nm.read_node_props(self.root.graph, self.node_associated_id[canvas_node_id])
-            x = props['x'] / 3 * self.resized_playground_img.width() # Change this value to change the scale of the playground
-            y = props['y'] / 2 * self.resized_playground_img.height() # Change this value to change the scale of the playground
-            self.coords(canvas_node_id, x-10, y-10, x+10, y+10)
-            self.coords(canvas_node_id+1, x, y)
-            self.itemconfigure(canvas_node_id, fill=props['color'])
-
-        self.delete("edge")
-        for canvas_node_id in self.node_associated_id.keys():
-            self.draw_edges_from_node(self.node_associated_id[canvas_node_id])        # C'est pas opti je sais...
-        self.root.statusbar.update_complexity(nm.number_of_edges(self.root.graph))
-    
-    def draw_edges_from_node(self, node_id):
-        playground_width = self.resized_playground_img.width()
-        playground_height = self.resized_playground_img.height()
-        origin_node_props = nm.read_node_props(self.root.graph, node_id)
-        origin_node_px_pos = origin_node_props['x'] / 3 * playground_width, origin_node_props['y'] / 2 * playground_height
-        for edge in nm.read_edges(self.root.graph, node_id):
-            dest_node_px_pos = nm.read_node_props(self.root.graph, edge[1])['x'] / 3 * playground_width, nm.read_node_props(self.root.graph, edge[1])['y'] / 2 * playground_height
-            self.create_line(origin_node_px_pos, dest_node_px_pos, fill="black", width=1, tags="edge")
-        self.tag_raise("node")
     
     def resize_callback(self, *args):
         if int(int(self.winfo_width()))*self.playground_img_ratio <= int(int(self.winfo_height())):
@@ -149,9 +149,9 @@ class MainCanvas(tk.Canvas):
             self.coords(self.canvas_img, int(int(self.winfo_height())/self.playground_img_ratio/2), int(int(self.winfo_height())/2))
         self.itemconfigure(self.canvas_img, image=self.resized_playground_img)
         
-        for canvas_node_id in self.node_associated_id.keys():
-            self.update_canvas_node(canvas_node_id)           # C'est pas opti je sais...
-    
+        for canvas_node_id in self.node_associated_id.values():
+            canvas_node_id.update_node(self.root.graph)
+
     def node_left_cliked(self, event):
         """
             This Event occurs when the user left clicks on a node.
@@ -168,63 +168,49 @@ class MainCanvas(tk.Canvas):
         self.last_node_selected = node_selected
 
         # We load selected node proprieties to the the PropertiesTab
-        self.root.properties_tab.load_properties(self.node_associated_id[node_selected])
+        self.root.properties_tab.load_properties(self.node_associated_id[node_selected].node_id)
 
     def playground_left_cliked(self, event):
         # Draw a new node with a text label
-        tkinter_id = self.create_oval(event.x-10, event.y-10, event.x+10, event.y+10, fill="red", tags="node")
-        # Create a new id for the node and save it to a dictionary where the key is the generated id and the value is the canvas associated id 
-        id = max(self.node_associated_id.values())+1 if self.node_associated_id != {} else 1
-        self.node_associated_id[tkinter_id] = id
+        id = max(node.node_id for node in self.node_associated_id.values())+1 if self.node_associated_id != {} else 1
+        node_obj = Canvas_Node(self, id,event.x, event.y)
+        self.node_associated_id[node_obj.tk_node_id] = node_obj
 
-        self.create_text(event.x, event.y, text=str(id), tags="node")
-
-        #convert pixel to meter and save data to the graph
-        x = event.x * 3 / self.resized_playground_img.width() # Change this value to change the scale of the playground
-        y = event.y * 2 / self.resized_playground_img.height() # Change this value to change the scale of the playground
-        print(x, y)
-        nm.add_node_to_Graph(self.root.graph, id, x, y)
-        nm.create_edges(self.root.graph, id)
-        self.draw_edges_from_node(id)
         self.node_left_cliked(event)
         self.root.statusbar.update_complexity(nm.number_of_edges(self.root.graph))
     
     def left_key_pressed(self, event):
-        actual_x_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_node_selected])['x']
-        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_node_selected], x=actual_x_pos-0.02)
-        self.update_canvas_node(self.last_node_selected)
-        self.root.properties_tab.load_properties(self.node_associated_id[self.last_node_selected])
+        actual_x_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id)['x']
+        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id, x=actual_x_pos-0.02)
+        self.node_associated_id[self.last_node_selected].update_node(self.root.graph)
+        self.root.properties_tab.load_properties(self.node_associated_id[self.last_node_selected].node_id)
     
     def right_key_pressed(self, event):
-        actual_x_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_node_selected])['x']
-        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_node_selected], x=actual_x_pos+0.02)
-        self.update_canvas_node(self.last_node_selected)
-        self.root.properties_tab.load_properties(self.node_associated_id[self.last_node_selected])
+        actual_x_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id)['x']
+        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id, x=actual_x_pos+0.02)
+        self.node_associated_id[self.last_node_selected].update_node(self.root.graph)
+        self.root.properties_tab.load_properties(self.node_associated_id[self.last_node_selected].node_id)
     
     def up_key_pressed(self, event):
-        actual_y_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_node_selected])['y']
-        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_node_selected], y=actual_y_pos-0.02)
-        self.update_canvas_node(self.last_node_selected)
-        self.root.properties_tab.load_properties(self.node_associated_id[self.last_node_selected])
+        actual_y_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id)['y']
+        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id, y=actual_y_pos-0.02)
+        self.node_associated_id[self.last_node_selected].update_node(self.root.graph)
+        self.root.properties_tab.load_properties(self.node_associated_id[self.last_node_selected].node_id)
     
     def down_key_pressed(self, event):
-        actual_y_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_node_selected])['y']
-        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_node_selected], y=actual_y_pos+0.02)
-        self.update_canvas_node(self.last_node_selected)
-        self.root.properties_tab.load_properties(self.node_associated_id[self.last_node_selected])
+        actual_y_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id)['y']
+        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id, y=actual_y_pos+0.02)
+        self.node_associated_id[self.last_node_selected].update_node(self.root.graph)
+        self.root.properties_tab.load_properties(self.node_associated_id[self.last_node_selected].node_id)
     
     def delete_key_pressed(self, event):
         self.root.properties_tab.load_properties(None)
-        nm.delete_node(self.root.graph, self.node_associated_id[self.last_node_selected])
-        self.node_associated_id.pop(self.last_node_selected)
-        self.delete(self.last_node_selected)
-        self.delete(self.last_node_selected+1)
+        self.node_associated_id[self.last_node_selected].delete_node(self.root.graph)
         self.last_node_selected = None
-        self.update_canvas_node(self.last_node_selected)
 
 class ProprietiesTab(tk.LabelFrame):
     def __init__(self, parent, root):
-        super().__init__(parent, text="Propriety")
+        super().__init__(parent, text="Proprieties")
         self.parent = parent
         self.root = root
         xposLabel = tk.Label(self, text="X Position")
@@ -235,10 +221,24 @@ class ProprietiesTab(tk.LabelFrame):
         yposLabel.grid(row=1, column=0)
         self.yposEntry = tk.Entry(self, validatecommand=lambda: self.entry_value_changed("y"), validate="focus")
         self.yposEntry.grid(row=1, column=1)
+        descriptionLabel = tk.Label(self, text="Description")
+        descriptionLabel.grid(row=2, column=0)
+        self.descriptionText = tk.Text(self, height=3, width=20)
+        self.descriptionText.grid(row=2, column=1)
+        orientationoptionmenuLabel = tk.Label(self, text="Orientation")
+        orientationoptionmenuLabel.grid(row=3, column=0)
+        defaultstrVar = tk.StringVar()
+        defaultstrVar.set("None")
+        self.orientationoptionmenu = tk.OptionMenu(self, defaultstrVar,*("North", "South", "East", "West"))
+        self.orientationoptionmenu.grid(row=3, column=1)
+        self.orientationoptionmenu.config(width=10)
         colorLabel = tk.Label(self, text="Color :")
-        colorLabel.grid(row=2, column=0)
+        colorLabel.grid(row=4, column=0)
         self.colorButton = tk.Button(self, text="Choose Color", command=self.choose_color)
-        self.colorButton.grid(row=2, column=1)
+        self.colorButton.grid(row=4, column=1)
+
+        for w in self.winfo_children():
+                w.config(state="disabled")
 
     def entry_value_changed(self, entry_name):
         # A changer c'est horriblement écrit là, valable pour toute cette fonction, tout est horrible...
@@ -249,26 +249,34 @@ class ProprietiesTab(tk.LabelFrame):
         try:
             float(text)
             if entry_name == "x":
-                nm.write_node_props(self.root.graph, self.root.maincanvas.node_associated_id[self.root.maincanvas.last_node_selected], x=float(text))
+                nm.write_node_props(self.root.graph, self.root.maincanvas.node_associated_id[self.root.maincanvas.last_node_selected].node_id, x=float(text))
             elif entry_name == "y":
-                nm.write_node_props(self.root.graph, self.root.maincanvas.node_associated_id[self.root.maincanvas.last_node_selected], y=float(text))
-            self.root.maincanvas.update_canvas_node(self.root.maincanvas.last_node_selected)
+                nm.write_node_props(self.root.graph, self.root.maincanvas.node_associated_id[self.root.maincanvas.last_node_selected].node_id, y=float(text))
+            self.root.maincanvas.node_associated_id[self.root.maincanvas.last_node_selected].update_node(self.root.graph)
             return True
         except ValueError:
             return False
+    
     def choose_color(self):
         self.color = askcolor()
         self.colorButton.config(bg=self.color[1])
-        nm.write_node_props(self.root.graph, self.root.maincanvas.node_associated_id[self.root.maincanvas.last_node_selected], color=self.color[1])
-        self.root.maincanvas.update_canvas_node(self.root.maincanvas.last_node_selected)
+
+        sel_node = self.root.maincanvas.node_associated_id[self.root.maincanvas.last_node_selected]
+        nm.write_node_props(self.root.graph, sel_node.node_id, color=self.color[1])
+
+        sel_node.update_node(self.root.graph)
 
     def load_properties(self, node_id):
         if node_id is None:
             self.xposEntry.delete(0, tk.END)
             self.yposEntry.delete(0, tk.END)
             self.colorButton.config(bg="white")
+            for w in self.winfo_children():
+                w.config(state="disabled")
             self.root.statusbar.update_status("One node as been deleted")
         else:
+            for w in self.winfo_children():
+                w.config(state="normal")
             self.root.statusbar.update_status("Editing Node n° " + str(node_id))
             props = nm.read_node_props(self.root.graph, node_id)
             self.xposEntry.delete(0, tk.END)

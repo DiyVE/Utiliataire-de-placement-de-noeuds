@@ -9,10 +9,11 @@ import filemanager as fm
 import networkmanager as nm
 import time
 from pygame import mixer
+from tkinter.filedialog import asksaveasfilename, askopenfilename
 
 
 class Canvas_Node():
-    def __init__(self, canvas, node_id, px_init_x_pos, px_init_y_pos,radius=10, color='red'):
+    def __init__(self, canvas, node_id, px_init_x_pos=None, px_init_y_pos=None, real_init_x_pos=None, real_init_y_pos=None, radius=10, color='red'):
         self.canvas = canvas
         self.node_id = node_id
         self.radius = radius
@@ -20,21 +21,28 @@ class Canvas_Node():
         self.real_pos = [0, 0]
         self.px_pos = [0, 0]
 
-        self.tk_node_id, self.tk_label_id = self.create_node(px_init_x_pos, px_init_y_pos)
+        if px_init_x_pos is not None and px_init_y_pos is not None:
+            self.px_pos = [px_init_x_pos, px_init_y_pos]
+            self.real_pos = self.get_real_pos_from_px(self.px_pos)
+        elif real_init_x_pos is not None and real_init_y_pos is not None:
+            self.real_pos = [real_init_x_pos, real_init_y_pos]
+            self.px_pos = self.get_px_pos_from_real(self.real_pos)
+        else:
+            raise ValueError('You must specify either the pixel position or the real position of the node')
+        
+        self.tk_node_id, self.tk_label_id = self.create_node()
 
-    def create_node(self, px_init_x_pos, px_init_y_pos):
-        self.px_pos = [px_init_x_pos, px_init_y_pos]
-        self.real_pos = self.get_real_pos_from_px(self.px_pos)
+    def create_node(self):
         tk_node_id = self.canvas.create_oval(self.px_pos[0] - self.radius, self.px_pos[1] - self.radius, self.px_pos[0] + self.radius, self.px_pos[1] + self.radius, fill=self.color, tags='node')
         tk_label_id = self.canvas.create_text(self.px_pos[0], self.px_pos[1], text=self.node_id, tags='node')
-        nm.add_node_to_Graph(self.canvas.root.graph, self.node_id, self.real_pos[0], self.real_pos[1])
+        nm.add_node_to_Graph(self.canvas.root.graph, self.node_id, self.real_pos[0], self.real_pos[1], color=self.color)
         nm.create_edges(self.canvas.root.graph, self.node_id)
         self.draw_node_edges(self.canvas.root.graph)
         return tk_node_id, tk_label_id
     
     def get_real_pos_from_px(self, px_pos):
-        real_pos = [self.px_pos[0] * 3 / self.canvas.resized_playground_img.width(), # Change this value to change the scale of the playground
-                    self.px_pos[1] * 2 / self.canvas.resized_playground_img.height()] # Change this value to change the scale of the playground
+        real_pos = [self.px_pos[0] * 3 / self.canvas.resized_playground_img.width(),
+                    self.px_pos[1] * 2 / self.canvas.resized_playground_img.height()]
         return real_pos
     
     def get_px_pos_from_real(self, real_pos):
@@ -131,6 +139,10 @@ class MainCanvas(tk.Canvas):
         
         self.last_node_selected = None
 
+        for node in nm.get_nodes(self.root.graph):
+            node_obj = Canvas_Node(self, node[0], real_init_x_pos=node[1]['x'], real_init_y_pos=node[1]['y'], color=node[1]['color'])
+            self.node_associated_id[node_obj.tk_node_id] = node_obj
+
         self.bind("<Configure>", self.resize_callback)
 
         self.bind_all("<KeyPress-Left>", self.left_key_pressed)
@@ -141,7 +153,7 @@ class MainCanvas(tk.Canvas):
 
         self.tag_bind("node","<ButtonPress-1>",self.node_left_cliked)
         self.tag_bind("playground","<Button-1>",self.playground_left_cliked)
-    
+
     def resize_callback(self, *args):
         if int(int(self.winfo_width()))*self.playground_img_ratio <= int(int(self.winfo_height())):
             self.resized_playground_img = ImageTk.PhotoImage(self.playground_img.resize((int(int(self.winfo_width())), int(int(self.winfo_width())*self.playground_img_ratio))))
@@ -260,7 +272,7 @@ class ProprietiesTab(tk.LabelFrame):
             return False
     
     def choose_color(self):
-        self.color = askcolor()
+        self.color = askcolor('#ff0000', parent=self)
         self.colorButton.config(bg=self.color[1])
 
         sel_node = self.root.maincanvas.node_associated_id[self.root.maincanvas.last_node_selected]
@@ -311,14 +323,17 @@ class AboutTopLevel(tk.Toplevel):
                                             image=thomascanvasResized,
                                             anchor=tk.CENTER,
                                             tags="thomas")
-        self.left_pupils = self.canvasthomas.create_oval(50, 59, 55, 64, fill="black")
-        self.right_pupils = self.canvasthomas.create_oval(84, 59, 89, 64, fill="black")
+        self.left_pupils = self.canvasthomas.create_oval(50, 59, 55, 64, fill="black", tags="thomas")
+        self.right_pupils = self.canvasthomas.create_oval(84, 59, 89, 64, fill="black", tags="thomas")
 
-        # Updating the pupils
         self.canvasthomas.bind_all("<Motion>", self.update_pupils)
+        self.canvasthomas.tag_bind("thomas", "<Button-1>", self.whistle)
         
         self.mainloop()
     
+    def whistle(self, event):
+        mixer.Channel(0).play(mixer.Sound('sounds/whistle.mp3'), maxtime=2500)
+
     def update_pupils(self, event):
         left_eye_canvas_pos = 52.5, 61.5
         right_eye_canvas_pos = 81.5, 61.5
@@ -352,6 +367,7 @@ class AboutTopLevel(tk.Toplevel):
 class MenuBar(tk.Menu):
     def __init__(self, parent):
         super().__init__(parent)
+        self.parent = parent
         self.filemenu = tk.Menu(self, tearoff="off")
         self.add_cascade(label='File', menu=self.filemenu)
         self.filemenu.add_command(label='New file', command=self.new_file)
@@ -379,10 +395,15 @@ class MenuBar(tk.Menu):
         newmainApp.mainloop()
 
     def open_file(self):
-        pass
+        filepath = askopenfilename(filetypes=[("Graph Modelling Language File", "*.gml"), ("All files", "*.*")])
+        if filepath:
+            newmainApp = MainApplication(nm.read_graph(filepath))
+            newmainApp.mainloop()
 
     def save_file(self):
-        pass
+        filepath = asksaveasfilename(defaultextension=".gml", filetypes=[("Graph Modelling Language File", "*.gml"), ("All files", "*.*")])
+        if filepath:
+            nm.save_graph(self.parent.graph, filepath)
 
     def undo(self):
         pass
@@ -400,8 +421,8 @@ class MenuBar(tk.Menu):
         aboutToplevel = AboutTopLevel(self)
 
 
-class MainApplication(tk.Tk):
-    def __init__(self):
+class MainApplication(tk.Toplevel):
+    def __init__(self, graph=nm.init_Graph()):
         super().__init__()
 
         # Setting up basic windows shape and infos
@@ -411,8 +432,8 @@ class MainApplication(tk.Tk):
         self.grid_columnconfigure(index=0, weight=1)
         self.grid_rowconfigure(index=0, weight=1)
         self.iconphoto(True, tk.PhotoImage(file="images/app_icon.png"))
+        self.graph = graph
         self.init_ui()
-        self.graph = nm.init_Graph()
 
     def init_ui(self):
         self.menubar = MenuBar(self)
@@ -432,5 +453,10 @@ class MainApplication(tk.Tk):
 
 
 if __name__ == "__main__":
+    primary = tk.Tk()
+    # Hide the window
+    primary.withdraw()
+
+    # Create the application
     mainApp = MainApplication()
     mainApp.mainloop()

@@ -1,13 +1,14 @@
 from logging import root
+import math
 import tkinter as tk
 from requests import delete
 from tkcolorpicker import askcolor
-from turtle import color, window_height
 from PIL import Image, ImageTk
 from cv2 import resize
 import filemanager as fm
 import networkmanager as nm
 import time
+from pygame import mixer
 
 
 class Canvas_Node():
@@ -95,8 +96,9 @@ class MainToolbar(tk.Frame):
 
 
 class StatusBar(tk.Frame):
-    def __init__(self):
-        super().__init__(height=20, bd=1, relief=tk.SUNKEN)
+    def __init__(self, parent):
+        super().__init__(parent, height=20, bd=1, relief=tk.SUNKEN)
+        self.parent = parent
         self.status_label = tk.Label(self, text="Ready !")
         self.status_label.pack(side=tk.LEFT)
         self.complexity_label = tk.Label(self, text="Graph Complexity: 0")
@@ -286,6 +288,65 @@ class ProprietiesTab(tk.LabelFrame):
             self.colorButton.config(bg=props['color'])
 
 
+class AboutTopLevel(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.title("About")
+        self.geometry("400x190")
+        self.resizable(False, False)
+        self.config(bg="white")
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
+        self.canvasthomas = tk.Canvas(self, width=134, height=190, bg="white")
+        self.canvasthomas.pack(side=tk.LEFT)
+        mixer.init()
+        mixer.music.load("sounds/thomas.mp3")
+        mixer.music.play()
+
+        thomascanvas = Image.open("images/thomas.png")
+        img_ratio = thomascanvas.size[1] / thomascanvas.size[0]
+        thomascanvasResized = ImageTk.PhotoImage(thomascanvas.resize((int(190/img_ratio), 190)))
+        self.canvas_img = self.canvasthomas.create_image(190/img_ratio/2,
+                                            190/2,
+                                            image=thomascanvasResized,
+                                            anchor=tk.CENTER,
+                                            tags="thomas")
+        self.left_pupils = self.canvasthomas.create_oval(50, 59, 55, 64, fill="black")
+        self.right_pupils = self.canvasthomas.create_oval(84, 59, 89, 64, fill="black")
+
+        # Updating the pupils
+        self.canvasthomas.bind_all("<Motion>", self.update_pupils)
+        
+        self.mainloop()
+    
+    def update_pupils(self, event):
+        left_eye_canvas_pos = 52.5, 61.5
+        right_eye_canvas_pos = 81.5, 61.5
+        
+        # Get the mouse position relative to the widget
+        mouse_pos = event.x, event.y
+
+        # Get the mouse position relative to the eyes
+        mouse_pos_left = (mouse_pos[0] - left_eye_canvas_pos[0], mouse_pos[1] - left_eye_canvas_pos[1])
+        mouse_pos_right = (mouse_pos[0] - right_eye_canvas_pos[0], mouse_pos[1] - right_eye_canvas_pos[1])
+
+        # Get the angle of the mouse relative to the canvas
+        angle_left = math.atan2(mouse_pos_left[1], mouse_pos_left[0])
+        angle_right = math.atan2(mouse_pos_right[1], mouse_pos_right[0])
+
+        # Move the eyes
+        if math.sqrt(mouse_pos_left[0]**2 + mouse_pos_left[1]**2) < 5:
+            self.canvasthomas.coords(self.left_pupils, mouse_pos_left[0] + 50, mouse_pos_left[1] + 59, mouse_pos_left[0] + 55, mouse_pos_left[1] + 64)
+        else:
+            self.canvasthomas.coords(self.left_pupils, 5*math.cos(angle_left) + 50, 5*math.sin(angle_left) + 59, 5*math.cos(angle_left) + 55, 5*math.sin(angle_left) + 64)
+        if math.sqrt(mouse_pos_right[0]**2 + mouse_pos_right[1]**2) < 5:
+            self.canvasthomas.coords(self.right_pupils, mouse_pos_right[0] + 79, mouse_pos_right[1] + 59, mouse_pos_right[0] + 84, mouse_pos_right[1] + 64)
+        else:
+            self.canvasthomas.coords(self.right_pupils, 5*math.cos(angle_right) + 79, 5*math.sin(angle_right) + 59, 5*math.cos(angle_right) + 84, 5*math.sin(angle_right) + 64)
+
+    def destroy(self):
+        mixer.music.stop()
+        self.destroy()
 
 
 class MenuBar(tk.Menu):
@@ -314,7 +375,8 @@ class MenuBar(tk.Menu):
         self.helpmenu.add_command(label='About', command=self.about)
 
     def new_file(self):
-        pass
+        newmainApp = MainApplication()
+        newmainApp.mainloop()
 
     def open_file(self):
         pass
@@ -335,7 +397,7 @@ class MenuBar(tk.Menu):
         pass
     
     def about(self):
-        pass
+        aboutToplevel = AboutTopLevel(self)
 
 
 class MainApplication(tk.Tk):
@@ -365,7 +427,7 @@ class MainApplication(tk.Tk):
         self.properties_tab = ProprietiesTab(self.workspace_Frame, self)
         self.properties_tab.pack(side=tk.LEFT, fill=tk.Y, anchor=tk.W)
 
-        self.statusbar = StatusBar()
+        self.statusbar = StatusBar(self)
         self.statusbar.pack(side=tk.BOTTOM, fill=tk.X)
 
 

@@ -17,6 +17,9 @@ def get_nodes(graph):
 
 def is_empty(graph):
     return graph.is_empty()
+
+def node_has_edge(graph, node_id):
+    return False if list(graph.edges(node_id)) == [] else True
     
 def read_node_props(graph, node_id):
     return graph.nodes[node_id]
@@ -33,6 +36,10 @@ def read_edges(graph, node_id):
 
 def delete_node(graph, node_id):
     graph.remove_node(node_id)
+
+def delete_edge(graph, nodes_tuple):
+    nodes_tuple = list(nodes_tuple)
+    graph.remove_edge(nodes_tuple[0], nodes_tuple[1])
 
 def number_of_edges(graph):
     return graph.number_of_edges()

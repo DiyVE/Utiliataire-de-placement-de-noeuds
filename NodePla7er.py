@@ -37,7 +37,7 @@ class Canvas_Node():
         tk_node_id = self.canvas.create_oval(self.px_pos[0] - self.radius, self.px_pos[1] - self.radius, self.px_pos[0] + self.radius, self.px_pos[1] + self.radius, fill=self.color, tags='node')
         tk_label_id = self.canvas.create_text(self.px_pos[0], self.px_pos[1], text=self.node_id, tags='node')
         nm.add_node_to_Graph(self.canvas.root.graph, self.node_id, self.real_pos[0], self.real_pos[1], color=self.color)
-        nm.create_edges(self.canvas.root.graph, self.node_id)
+        if not nm.node_has_edge(self.canvas.root.graph, self.node_id): nm.create_edges(self.canvas.root.graph, self.node_id)
         self.draw_node_edges(self.canvas.root.graph)
         return tk_node_id, tk_label_id
     
@@ -96,7 +96,6 @@ class Canvas_Node():
         # Poping out the node from the graph
         self.canvas.node_associated_id.pop(self.tk_node_id)
         nm.delete_node(graph, self.node_id)
-        
 
 
 class MainToolbar(tk.Frame):
@@ -138,8 +137,8 @@ class MainCanvas(tk.Canvas):
                                             anchor=tk.CENTER,
                                             tags="playground")
         
-        self.last_node_selected = None
-        self.last_edge_selected = None
+        self.last_element_selected = None
+        self.last_element_selected = None
 
         for node in nm.get_nodes(self.root.graph):
             node_obj = Canvas_Node(self, node[0], real_init_x_pos=node[1]['x'], real_init_y_pos=node[1]['y'], color=node[1]['color'])
@@ -179,10 +178,13 @@ class MainCanvas(tk.Canvas):
         self.itemconfigure(node_selected, outline='blue', width=3)
 
         # If the user has already selected a node, we unselect it
-        if self.last_node_selected is not None:
-            self.itemconfigure(self.last_node_selected, outline="black", width=1)
+        if self.last_element_selected is not None:
+            if self.type(self.last_element_selected) == 'line':
+                self.itemconfigure(self.last_element_selected, fill="black", width=1)
+            else:
+                self.itemconfigure(self.last_element_selected, outline="black", width=1)
 
-        self.last_node_selected = node_selected
+        self.last_element_selected = node_selected
 
         # We load selected node proprieties to the the PropertiesTab
         self.root.properties_tab.load_properties(self.node_associated_id[node_selected].node_id)
@@ -197,48 +199,57 @@ class MainCanvas(tk.Canvas):
         self.root.statusbar.update_complexity(nm.number_of_edges(self.root.graph))
     
     def edge_left_cliked(self, event):
-        # We select the edge and not the line
         edge_selected = self.find_closest(event.x, event.y)[0]
-
+        self.root.properties_tab.load_properties(None)
         self.itemconfigure(edge_selected, fill='blue', width=3)
 
         # If the user has already selected an edge, we unselect it
-        if self.last_edge_selected is not None:
-            self.itemconfigure(self.last_edge_selected, fill="black", width=1)
+        if self.last_element_selected is not None:
+            if self.type(self.last_element_selected) == 'line':
+                self.itemconfigure(self.last_element_selected, fill="black", width=1)
+            else:
+                self.itemconfigure(self.last_element_selected, outline="black", width=1)
 
-        self.last_edge_selected = edge_selected
-
-        # We load selected edge proprieties to the the PropertiesTab
-        self.root.properties_tab.load_properties(self.edges_ids[edge_selected])
+        self.last_element_selected = edge_selected
 
     def left_key_pressed(self, event):
-        actual_x_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id)['x']
-        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id, x=actual_x_pos-0.02)
-        self.node_associated_id[self.last_node_selected].update_node(self.root.graph)
-        self.root.properties_tab.load_properties(self.node_associated_id[self.last_node_selected].node_id)
+        actual_x_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_element_selected].node_id)['x']
+        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_element_selected].node_id, x=actual_x_pos-0.02)
+        self.node_associated_id[self.last_element_selected].update_node(self.root.graph)
+        self.root.properties_tab.load_properties(self.node_associated_id[self.last_element_selected].node_id)
     
     def right_key_pressed(self, event):
-        actual_x_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id)['x']
-        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id, x=actual_x_pos+0.02)
-        self.node_associated_id[self.last_node_selected].update_node(self.root.graph)
-        self.root.properties_tab.load_properties(self.node_associated_id[self.last_node_selected].node_id)
+        actual_x_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_element_selected].node_id)['x']
+        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_element_selected].node_id, x=actual_x_pos+0.02)
+        self.node_associated_id[self.last_element_selected].update_node(self.root.graph)
+        self.root.properties_tab.load_properties(self.node_associated_id[self.last_element_selected].node_id)
     
     def up_key_pressed(self, event):
-        actual_y_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id)['y']
-        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id, y=actual_y_pos-0.02)
-        self.node_associated_id[self.last_node_selected].update_node(self.root.graph)
-        self.root.properties_tab.load_properties(self.node_associated_id[self.last_node_selected].node_id)
+        actual_y_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_element_selected].node_id)['y']
+        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_element_selected].node_id, y=actual_y_pos-0.02)
+        self.node_associated_id[self.last_element_selected].update_node(self.root.graph)
+        self.root.properties_tab.load_properties(self.node_associated_id[self.last_element_selected].node_id)
     
     def down_key_pressed(self, event):
-        actual_y_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id)['y']
-        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id, y=actual_y_pos+0.02)
-        self.node_associated_id[self.last_node_selected].update_node(self.root.graph)
-        self.root.properties_tab.load_properties(self.node_associated_id[self.last_node_selected].node_id)
+        actual_y_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_element_selected].node_id)['y']
+        nm.write_node_props(self.root.graph, self.node_associated_id[self.last_element_selected].node_id, y=actual_y_pos+0.02)
+        self.node_associated_id[self.last_element_selected].update_node(self.root.graph)
+        self.root.properties_tab.load_properties(self.node_associated_id[self.last_element_selected].node_id)
     
     def delete_key_pressed(self, event):
-        self.root.properties_tab.load_properties(None)
-        self.node_associated_id[self.last_node_selected].delete_node(self.root.graph)
-        self.last_node_selected = None
+        if self.type(self.last_element_selected) == 'line':
+            self.root.properties_tab.load_properties(None)
+            self.delete_edge(self.root.graph, self.last_element_selected)
+        elif self.type(self.last_element_selected) == 'oval':
+            self.node_associated_id[self.last_element_selected].delete_node(self.root.graph)
+    
+    def delete_edge(self, graph, edge_tk_id):
+        self.delete(edge_tk_id)
+        for key, value in self.edges_ids.items():
+            if value == edge_tk_id:
+                self.edges_ids.pop(key)
+                nm.delete_edge(graph, key)
+                break
 
 class ProprietiesTab(tk.LabelFrame):
     def __init__(self, parent, root):
@@ -281,10 +292,10 @@ class ProprietiesTab(tk.LabelFrame):
         try:
             float(text)
             if entry_name == "x":
-                nm.write_node_props(self.root.graph, self.root.maincanvas.node_associated_id[self.root.maincanvas.last_node_selected].node_id, x=float(text))
+                nm.write_node_props(self.root.graph, self.root.maincanvas.node_associated_id[self.root.maincanvas.last_element_selected].node_id, x=float(text))
             elif entry_name == "y":
-                nm.write_node_props(self.root.graph, self.root.maincanvas.node_associated_id[self.root.maincanvas.last_node_selected].node_id, y=float(text))
-            self.root.maincanvas.node_associated_id[self.root.maincanvas.last_node_selected].update_node(self.root.graph)
+                nm.write_node_props(self.root.graph, self.root.maincanvas.node_associated_id[self.root.maincanvas.last_element_selected].node_id, y=float(text))
+            self.root.maincanvas.node_associated_id[self.root.maincanvas.last_element_selected].update_node(self.root.graph)
             return True
         except ValueError:
             return False
@@ -293,7 +304,7 @@ class ProprietiesTab(tk.LabelFrame):
         self.color = askcolor('#ff0000', parent=self)
         self.colorButton.config(bg=self.color[1])
 
-        sel_node = self.root.maincanvas.node_associated_id[self.root.maincanvas.last_node_selected]
+        sel_node = self.root.maincanvas.node_associated_id[self.root.maincanvas.last_element_selected]
         nm.write_node_props(self.root.graph, sel_node.node_id, color=self.color[1])
 
         sel_node.update_node(self.root.graph)

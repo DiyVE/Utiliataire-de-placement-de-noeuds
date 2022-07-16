@@ -1,6 +1,7 @@
 from logging import root
 import math
 import tkinter as tk
+from matplotlib.pyplot import fill
 from requests import delete
 from tkcolorpicker import askcolor
 from PIL import Image, ImageTk
@@ -138,10 +139,11 @@ class MainCanvas(tk.Canvas):
                                             tags="playground")
         
         self.last_node_selected = None
+        self.last_edge_selected = None
 
         for node in nm.get_nodes(self.root.graph):
             node_obj = Canvas_Node(self, node[0], real_init_x_pos=node[1]['x'], real_init_y_pos=node[1]['y'], color=node[1]['color'])
-            self.node_associated_id[node_obj.tk_node_id] = node_obj
+            self.node_associated_id[int(node_obj.tk_node_id)] = node_obj
 
         self.bind("<Configure>", self.resize_callback)
 
@@ -153,6 +155,7 @@ class MainCanvas(tk.Canvas):
 
         self.tag_bind("node","<ButtonPress-1>",self.node_left_cliked)
         self.tag_bind("playground","<Button-1>",self.playground_left_cliked)
+        self.tag_bind("edge","<Button-1>",self.edge_left_cliked)
 
     def resize_callback(self, *args):
         if int(int(self.winfo_width()))*self.playground_img_ratio <= int(int(self.winfo_height())):
@@ -186,13 +189,28 @@ class MainCanvas(tk.Canvas):
 
     def playground_left_cliked(self, event):
         # Draw a new node with a text label
-        id = max(node.node_id for node in self.node_associated_id.values())+1 if self.node_associated_id != {} else 1
+        id = max(int(node.node_id) for node in self.node_associated_id.values())+1 if self.node_associated_id != {} else 1
         node_obj = Canvas_Node(self, id,event.x, event.y)
         self.node_associated_id[node_obj.tk_node_id] = node_obj
 
         self.node_left_cliked(event)
         self.root.statusbar.update_complexity(nm.number_of_edges(self.root.graph))
     
+    def edge_left_cliked(self, event):
+        # We select the edge and not the line
+        edge_selected = self.find_closest(event.x, event.y)[0]
+
+        self.itemconfigure(edge_selected, fill='blue', width=3)
+
+        # If the user has already selected an edge, we unselect it
+        if self.last_edge_selected is not None:
+            self.itemconfigure(self.last_edge_selected, fill="black", width=1)
+
+        self.last_edge_selected = edge_selected
+
+        # We load selected edge proprieties to the the PropertiesTab
+        self.root.properties_tab.load_properties(self.edges_ids[edge_selected])
+
     def left_key_pressed(self, event):
         actual_x_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id)['x']
         nm.write_node_props(self.root.graph, self.node_associated_id[self.last_node_selected].node_id, x=actual_x_pos-0.02)

@@ -99,8 +99,48 @@ class Canvas_Node():
 
 
 class MainToolbar(tk.Frame):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, root):
+        super().__init__(root)
+        self.root = root
+        self.select_tool = tk.Button(self, text='Select', command=self.select)
+        self.select_tool.pack(side=tk.LEFT)
+        self.place_tool = tk.Button(self, text='Place Nodes', command=self.place)
+        self.place_tool.pack(side=tk.LEFT)
+        self.link_tool = tk.Button(self, text='Link Nodes', command=self.link)
+        self.link_tool.pack(side=tk.LEFT)
+        self.delete_tool = tk.Button(self, text='Delete', command=self.delete)
+        self.delete_tool.pack(side=tk.LEFT)
+        self.buttons = [self.select_tool, self.place_tool, self.link_tool, self.delete_tool]
+
+    def clear_selection(self):
+        for button in self.buttons:
+            button.config(relief=tk.RAISED)
+
+    def select(self):
+        self.clear_selection()
+        self.root.maincanvas.tag_bind("node","<ButtonPress-1>",self.root.maincanvas.node_left_cliked)
+        self.root.maincanvas.tag_bind("edge","<Button-1>",self.root.maincanvas.edge_left_cliked)
+        self.select_tool.config(relief=tk.SUNKEN)
+    
+    def place(self):
+        self.clear_selection()
+        self.root.maincanvas.tag_bind("node","<ButtonPress-1>",self.root.maincanvas.node_left_cliked)
+        self.root.maincanvas.tag_bind("edge","<Button-1>",self.root.maincanvas.edge_left_cliked)
+        self.place_tool.config(relief=tk.SUNKEN)
+
+    def link(self):
+        self.clear_selection()
+        self.root.maincanvas.tag_bind("node","<ButtonPress-1>",self.root.maincanvas.node_left_cliked)
+        self.root.maincanvas.tag_bind("edge","<Button-1>",self.root.maincanvas.edge_left_cliked)
+        self.link_tool.config(relief=tk.SUNKEN)
+
+    def delete(self):
+        self.clear_selection()
+        self.root.maincanvas.tag_bind("node","<ButtonPress-1>",self.root.maincanvas.node_left_cliked)
+        self.root.maincanvas.tag_bind("edge","<Button-1>",self.root.maincanvas.edge_left_cliked)
+        self.delete_tool.config(relief=tk.SUNKEN)
+
+
 
 
 class StatusBar(tk.Frame):
@@ -467,6 +507,9 @@ class MainApplication(tk.Toplevel):
     def init_ui(self):
         self.menubar = MenuBar(self)
         self.config(menu=self.menubar)
+
+        self.toolbar = MainToolbar(self)
+        self.toolbar.pack(side=tk.TOP, fill=tk.X)
 
         self.workspace_Frame = tk.Frame(self)
         self.workspace_Frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)

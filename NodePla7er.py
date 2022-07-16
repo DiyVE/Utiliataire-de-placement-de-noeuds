@@ -104,6 +104,7 @@ class MainToolbar(tk.Frame):
         self.root = root
         self.select_tool = tk.Button(self, text='Select', command=self.select)
         self.select_tool.pack(side=tk.LEFT)
+        self.select_tool.config(relief=tk.SUNKEN)
         self.place_tool = tk.Button(self, text='Place Nodes', command=self.place)
         self.place_tool.pack(side=tk.LEFT)
         self.link_tool = tk.Button(self, text='Link Nodes', command=self.link)
@@ -115,6 +116,9 @@ class MainToolbar(tk.Frame):
     def clear_selection(self):
         for button in self.buttons:
             button.config(relief=tk.RAISED)
+        self.root.maincanvas.tag_unbind("node","<ButtonPress-1>")
+        self.root.maincanvas.tag_unbind("edge","<Button-1>")
+        self.root.maincanvas.unbind("<Button-1>")
 
     def select(self):
         self.clear_selection()
@@ -124,20 +128,15 @@ class MainToolbar(tk.Frame):
     
     def place(self):
         self.clear_selection()
-        self.root.maincanvas.tag_bind("node","<ButtonPress-1>",self.root.maincanvas.node_left_cliked)
-        self.root.maincanvas.tag_bind("edge","<Button-1>",self.root.maincanvas.edge_left_cliked)
+        self.root.maincanvas.bind("<Button-1>", self.root.maincanvas.playground_left_cliked)
         self.place_tool.config(relief=tk.SUNKEN)
 
     def link(self):
         self.clear_selection()
-        self.root.maincanvas.tag_bind("node","<ButtonPress-1>",self.root.maincanvas.node_left_cliked)
-        self.root.maincanvas.tag_bind("edge","<Button-1>",self.root.maincanvas.edge_left_cliked)
         self.link_tool.config(relief=tk.SUNKEN)
 
     def delete(self):
         self.clear_selection()
-        self.root.maincanvas.tag_bind("node","<ButtonPress-1>",self.root.maincanvas.node_left_cliked)
-        self.root.maincanvas.tag_bind("edge","<Button-1>",self.root.maincanvas.edge_left_cliked)
         self.delete_tool.config(relief=tk.SUNKEN)
 
 
@@ -193,7 +192,6 @@ class MainCanvas(tk.Canvas):
         self.bind_all("<KeyPress-Delete>", self.delete_key_pressed)
 
         self.tag_bind("node","<ButtonPress-1>",self.node_left_cliked)
-        self.tag_bind("playground","<Button-1>",self.playground_left_cliked)
         self.tag_bind("edge","<Button-1>",self.edge_left_cliked)
 
     def resize_callback(self, *args):

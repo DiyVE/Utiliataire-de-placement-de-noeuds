@@ -1,5 +1,3 @@
-from doctest import master
-from logging import root
 import math
 import tkinter as tk
 from matplotlib.pyplot import fill
@@ -58,7 +56,7 @@ class Canvas_Node():
             dest_node_px_pos = self.get_px_pos_from_real((dest_node_data['x'], dest_node_data['y']))
             edge_link = frozenset({edge[1], edge[0]})
             if True and (edge_link not in self.canvas.edges_ids.keys()): # We will have to check here if the connection is possible and if the node is not already connected
-                line_id = self.canvas.create_line(self.px_pos[0], self.px_pos[1], dest_node_px_pos[0], dest_node_px_pos[1], fill='black', tags='edge')
+                line_id = self.canvas.create_line(self.px_pos[0], self.px_pos[1], dest_node_px_pos[0], dest_node_px_pos[1], fill='black', tags='edge', width=3)
                 self.canvas.edges_ids[edge_link] = line_id
             elif False and (edge_link in self.canvas.edges_ids.keys()): # Here is if the node is already connected and the connection is not longer possible
                 self.canvas.delete(self.edges_ids[edge_link])
@@ -131,8 +129,8 @@ class MainToolbar(tk.Frame):
 
     def select(self):
         self.clear_selection()
-        self.root.maincanvas.bind("<ButtonPress-1>", self.create_selection_rectangle)
-        self.root.maincanvas.bind("<ButtonRelease-1>", self.delete_selection_rectangle)
+        #self.root.maincanvas.bind("<ButtonPress-1>", self.create_selection_rectangle)
+        #self.root.maincanvas.bind("<ButtonRelease-1>", self.delete_selection_rectangle)
         self.root.maincanvas.tag_bind("node","<ButtonRelease-1>",self.root.maincanvas.node_left_cliked)
         self.root.maincanvas.tag_bind("edge","<ButtonRelease-1>",self.root.maincanvas.edge_left_cliked)
         self.select_tool.config(relief=tk.SUNKEN)
@@ -239,7 +237,7 @@ class MainCanvas(tk.Canvas):
         # If the user has already selected a node, we unselect it
         if self.last_element_selected is not None:
             if self.type(self.last_element_selected) == 'line':
-                self.itemconfigure(self.last_element_selected, fill="black", width=1)
+                self.itemconfigure(self.last_element_selected, fill="black", width=3)
             else:
                 self.itemconfigure(self.last_element_selected, outline="black", width=1)
 
@@ -259,17 +257,19 @@ class MainCanvas(tk.Canvas):
     
     def edge_left_cliked(self, event):
         edge_selected = self.find_closest(event.x, event.y)[0]
-        self.root.properties_tab.load_properties(None)
-        self.itemconfigure(edge_selected, fill='blue', width=3)
+        try:
+            self.itemconfigure(edge_selected, fill='blue', width=5)
+            # If the user has already selected an edge, we unselect it
+            if self.last_element_selected is not None:
+                if self.type(self.last_element_selected) == 'line':
+                    self.itemconfigure(self.last_element_selected, fill="black", width=3)
+                else:
+                    self.itemconfigure(self.last_element_selected, outline="black", width=1)
 
-        # If the user has already selected an edge, we unselect it
-        if self.last_element_selected is not None:
-            if self.type(self.last_element_selected) == 'line':
-                self.itemconfigure(self.last_element_selected, fill="black", width=1)
-            else:
-                self.itemconfigure(self.last_element_selected, outline="black", width=1)
-
-        self.last_element_selected = edge_selected
+            self.root.properties_tab.load_properties(None)
+            self.last_element_selected = edge_selected
+        except:
+            pass
 
     def left_key_pressed(self, event):
         actual_x_pos = nm.read_node_props(self.root.graph, self.node_associated_id[self.last_element_selected].node_id)['x']

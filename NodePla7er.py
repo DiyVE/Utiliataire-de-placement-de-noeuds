@@ -1,3 +1,4 @@
+from doctest import master
 from logging import root
 import math
 import tkinter as tk
@@ -102,33 +103,43 @@ class MainToolbar(tk.Frame):
     def __init__(self, root):
         super().__init__(root)
         self.root = root
-        self.select_tool = tk.Button(self, text='Select', command=self.select)
-        self.select_tool.pack(side=tk.LEFT)
+        self.imgselect = tk.PhotoImage(file="images/select_icon.png").subsample(22)
+        self.select_tool = tk.Button(self, height=32, text='Select', compound=tk.LEFT, image=self.imgselect, command=self.select)
+        self.select_tool.grid(row=0, column=0)
         self.select_tool.config(relief=tk.SUNKEN)
-        self.place_tool = tk.Button(self, text='Place Nodes', command=self.place)
-        self.place_tool.pack(side=tk.LEFT)
-        self.link_tool = tk.Button(self, text='Link Nodes', command=self.link)
-        self.link_tool.pack(side=tk.LEFT)
-        self.delete_tool = tk.Button(self, text='Delete', command=self.delete)
-        self.delete_tool.pack(side=tk.LEFT)
+        self.imgplace = tk.PhotoImage(file="images/place_node_icon.png").subsample(42)
+        self.place_tool = tk.Button(self, height=32, text='Place Nodes', compound=tk.LEFT, image=self.imgplace, command=self.place)
+        self.place_tool.grid(row=0, column=1)
+        self.imglink = tk.PhotoImage(file="images/link_node_icon.png").subsample(32)
+        self.link_tool = tk.Button(self, height=32, text='Link Nodes', compound=tk.LEFT, image=self.imglink, command=self.link, state=tk.DISABLED)
+        self.link_tool.grid(row=0, column=2)
+        self.imgdelete = tk.PhotoImage(file="images/delete_icon.png").subsample(22)
+        self.delete_tool = tk.Button(self, height=32, text='Delete', compound=tk.LEFT, image=self.imgdelete, command=self.delete, state=tk.DISABLED)
+        self.delete_tool.grid(row=0, column=3)
+
         self.buttons = [self.select_tool, self.place_tool, self.link_tool, self.delete_tool]
+
+        self.selection_rectangle = None
 
     def clear_selection(self):
         for button in self.buttons:
             button.config(relief=tk.RAISED)
-        self.root.maincanvas.tag_unbind("node","<ButtonPress-1>")
-        self.root.maincanvas.tag_unbind("edge","<Button-1>")
-        self.root.maincanvas.unbind("<Button-1>")
+        self.root.maincanvas.tag_unbind("node","<ButtonRelease-1>")
+        self.root.maincanvas.tag_unbind("edge","<ButtonRelease-1>")
+        self.root.maincanvas.unbind("<ButtonRelease-1>")
+        self.root.maincanvas.unbind("<ButtonPress-1>")
 
     def select(self):
         self.clear_selection()
-        self.root.maincanvas.tag_bind("node","<ButtonPress-1>",self.root.maincanvas.node_left_cliked)
-        self.root.maincanvas.tag_bind("edge","<Button-1>",self.root.maincanvas.edge_left_cliked)
+        self.root.maincanvas.bind("<ButtonPress-1>", self.create_selection_rectangle)
+        self.root.maincanvas.bind("<ButtonRelease-1>", self.delete_selection_rectangle)
+        self.root.maincanvas.tag_bind("node","<ButtonRelease-1>",self.root.maincanvas.node_left_cliked)
+        self.root.maincanvas.tag_bind("edge","<ButtonRelease-1>",self.root.maincanvas.edge_left_cliked)
         self.select_tool.config(relief=tk.SUNKEN)
     
     def place(self):
         self.clear_selection()
-        self.root.maincanvas.bind("<Button-1>", self.root.maincanvas.playground_left_cliked)
+        self.root.maincanvas.bind("<ButtonRelease-1>", self.root.maincanvas.playground_left_cliked)
         self.place_tool.config(relief=tk.SUNKEN)
 
     def link(self):
@@ -138,7 +149,18 @@ class MainToolbar(tk.Frame):
     def delete(self):
         self.clear_selection()
         self.delete_tool.config(relief=tk.SUNKEN)
+    
+    def create_selection_rectangle(self, event):
+        self.selection_rectangle = self.root.maincanvas.create_rectangle(event.x, event.y, event.x, event.y, fill="", outline="red", tags="selection_rectangle")
+        self.first_click_pos = (event.x, event.y)
+        self.root.maincanvas.bind("<Motion>",self.update_selection_rectangle)
 
+    def update_selection_rectangle(self, event):
+        self.root.maincanvas.coords(self.selection_rectangle, self.first_click_pos[0], self.first_click_pos[1], event.x, event.y)
+
+    def delete_selection_rectangle(self, event):
+        self.root.maincanvas.delete("selection_rectangle")
+        self.root.maincanvas.unbind("<Motion>")
 
 
 
@@ -177,7 +199,6 @@ class MainCanvas(tk.Canvas):
                                             tags="playground")
         
         self.last_element_selected = None
-        self.last_element_selected = None
 
         for node in nm.get_nodes(self.root.graph):
             node_obj = Canvas_Node(self, node[0], real_init_x_pos=node[1]['x'], real_init_y_pos=node[1]['y'], color=node[1]['color'])
@@ -191,8 +212,8 @@ class MainCanvas(tk.Canvas):
         self.bind_all("<KeyPress-Down>", self.down_key_pressed)
         self.bind_all("<KeyPress-Delete>", self.delete_key_pressed)
 
-        self.tag_bind("node","<ButtonPress-1>",self.node_left_cliked)
-        self.tag_bind("edge","<Button-1>",self.edge_left_cliked)
+        self.tag_bind("node","<ButtonRelease-1>",self.node_left_cliked)
+        self.tag_bind("edge","<ButtonRelease-1>",self.edge_left_cliked)
 
     def resize_callback(self, *args):
         if int(int(self.winfo_width()))*self.playground_img_ratio <= int(int(self.winfo_height())):
